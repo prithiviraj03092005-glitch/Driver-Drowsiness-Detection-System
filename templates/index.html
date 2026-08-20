@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Driver Monitoring Dashboard</title>
+
+  <!-- Chart.js for graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --bg: #05070a;
+      --bg-alt: #0b1018;
+      --card: #141b25;
+      --accent: #1e88ff;
+      --accent-soft: #264b8c;
+      --danger: #ff3b30;
+      --warning: #ffa000;
+      --safe: #00c853;
+      --text-main: #e5e9f0;
+      --text-soft: #a0aec0;
+      --border-subtle: #1f2933;
+      --shadow-soft: 0 16px 40px rgba(0, 0, 0, 0.65);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #111827 0, #02040a 45%, #000 100%);
+      color: var(--text-main);
+    }
+
+    /* ALARM SCREEN OVERLAY */
+    #alarmOverlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: radial-gradient(circle, rgba(255,0,0,0.55), rgba(0,0,0,0.9));
+      display: none;
+      z-index: 999;
+      animation: alarmPulse 0.4s infinite;
+      pointer-events: none;
+    }
+    @keyframes alarmPulse {
+      0% { opacity: 0.15; }
+      50% { opacity: 0.9; }
+      100% { opacity: 0.15; }
+    }
+
+    .page {
+      padding: 18px 22px 26px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .title-main {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #e9efff;
+    }
+
+    .title-sub {
+      font-size: 13px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .top-stats {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.85);
+      border: 1px solid rgba(148,163,184,0.25);
+      font-size: 13px;
+      color: var(--text-soft);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--safe);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.9);
+    }
+    .dot.off {
+      background: var(--danger);
+      box-shadow: 0 0 8px rgba(248, 113, 113, 0.9);
+    }
+
+    .layout-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      background: radial-gradient(circle at top left, #1f2937 0, #020617 60%);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid rgba(148,163,184,0.12);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(circle at top, rgba(56,189,248,0.16), transparent 65%);
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    .card-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    .card-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-soft);
+    }
+
+    .card-chip {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.4);
+      color: var(--text-soft);
+      background: rgba(15,23,42,0.75);
+    }
+
+    /* VIDEO PANEL */
+    .video-shell {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(51,65,85,0.9);
+      background: radial-gradient(circle at top, #020617 0,#000 100%);
+      position: relative;
+    }
+
+    .video-shell img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .hud-strip {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 6px 10px;
+      background: linear-gradient(to top, rgba(15,23,42,0.85), transparent);
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .hud-strip span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.4);
+      background: rgba(15,23,42,0.7);
+    }
+
+    /* STATUS CARDS */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .status-pill {
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      background: radial-gradient(circle at top left, #020617 0, #030712 55%);
+      border: 1px solid rgba(51,65,85,0.9);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-soft);
+    }
+
+    .status-label-strong {
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status-pill.safe    { border-color: rgba(74,222,128,0.7); }
+    .status-pill.blink   { border-color: rgba(250,204,21,0.7); }
+    .status-pill.drowsy  { border-color: rgba(249,115,22,0.9); }
+    .status-pill.sleep   { border-color: rgba(248,113,113,0.9); }
+    .status-pill.distr   { border-color: rgba(59,130,246,0.8); }
+
+    .status-pill.hidden { display: none; }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    .status-dot.safe   { background: var(--safe); }
+    .status-dot.blink  { background: var(--warning); }
+    .status-dot.drowsy { background: #ff9800; }
+    .status-dot.sleep  { background: var(--danger); }
+    .status-dot.distr  { background: var(--accent); }
+
+    /* BOTTOM LAYOUT */
+    .layout-bottom {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.9fr);
+      gap: 16px;
+    }
+
+    .chart-shell {
+      height: 260px;
+    }
+
+    /* COMPASS */
+    #compassCanvas {
+      background: radial-gradient(circle at center, #020617 0, #020617 40%, #000 100%);
+      border-radius: 50%;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.9);
+      border: 1px solid rgba(148,163,184,0.25);
+    }
+
+    .compass-hud-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-soft);
+      margin-top: 6px;
+    }
+
+    /* FACE TABLE */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      margin-top: 6px;
+    }
+
+    th, td {
+      padding: 5px 6px;
+      border-bottom: 1px solid rgba(30,41,59,0.9);
+      text-align: left;
+    }
+
+    th {
+      font-weight: 600;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 10px;
+    }
+
+    tr:nth-child(even) {
+      background: rgba(15,23,42,0.7);
+    }
+
+    tr:nth-child(odd) {
+      background: rgba(15,23,42,0.4);
+    }
+
+    .tag {
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .tag-ok    { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .tag-warn  { background: rgba(250,204,21,0.18); color: #facc15; }
+    .tag-bad   { background: rgba(248,113,113,0.25); color: #f87171; }
+
+    a { color: #7dd3fc; text-decoration: none; font-size: 12px; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div id="alarmOverlay"></div>
+
+<div class="page">
+  <div class="topbar">
+    <div class="title-block">
+      <div class="title-main">Driver Monitoring System</div>
+      <div class="title-sub">Real-time Drowsiness & Head Pose Analytics</div>
+    </div>
+    <div class="top-stats">
+      <div class="pill" id="cam-pill">
+        <span class="dot" id="cam-dot"></span>
+        <span id="cam-text">Camera: —</span>
+      </div>
+      <div class="pill">
+        FPS: <span id="stat-fps">–</span>
+      </div>
+      <div class="pill">
+        EAR Th: <span id="stat-ear-th">–</span>
+      </div>
+      <div class="pill" id="model-pill">
+        <span class="dot" id="model-dot"></span>
+        <span id="model-text">Mode: —</span>
+      </div>
+      <div class="pill">
+        <a href="/logs" target="_blank">Logs</a> ·
+        <a href="/logs_csv" target="_blank">Export CSV</a> ·
+        <a href="/calibration" target="_blank">Calibration</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout-main">
+    <!-- LEFT: VIDEO -->
+    <div class="card">
+      <div class="card-inner">
+        <div class="card-title-row">
+          <div class="card-title">Driver View</div>
+          <div class="card-chip">Camera Feed</div>
+        </div>
+        <div class="video-shell">
+          <img id="stream" src="/video_feed" alt="Video stream">
+          <div class="hud-strip">
+            <span><span style="font-size:10px;">Frame</span>
+              <span id="hud-res">–×–</span>
+            </span>
+            <span>
+              <span class="badge" id="hud-main-state">Waiting for face…</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: STATUS + FACE TABLE -->
+    <div class="card">
+      <div class="card-inner">
+        <div class="card-title-row">
+          <div class="card-title">Driver Status</div>
+          <div class="card-chip" id="chip-last-update">Last: –</div>
+        </div>
+
+        <div class="status-grid">
+          <div class="status-pill safe  hidden" id="card-safe">
+            <div>
+              <div class="status-label-strong">Safe</div>
+              <div style="font-size:11px;color:var(--text-soft);">Eyes open, head stable</div>
+            </div>
+            <div class="status-dot safe"></div>
+          </div>
+          <div class="status-pill blink hidden" id="card-blink">
+            <div>
+              <div class="status-label-strong">Blinking</div>
+              <div style="font-size:11px;color:var(--text-soft);">Normal blink detected</div>
+            </div>
+            <div class="status-dot blink"></div>
+          </div>
+          <div class="status-pill drowsy hidden" id="card-drowsy">
+            <div>
+              <div class="status-label-strong">Drowsy</div>
+              <div style="font-size:11px;color:var(--text-soft);">Prolonged eye closure</div>
+            </div>
+            <div class="status-dot drowsy"></div>
+          </div>
+          <div class="status-pill sleep hidden" id="card-sleep">
+            <div>
+              <div class="status-label-strong">Sleeping</div>
+              <div style="font-size:11px;color:var(--text-soft);">Critical: eyes closed & still</div>
+            </div>
+            <div class="status-dot sleep"></div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; font-size:12px; color:var(--text-soft);" id="system-status">
+          Loading system metrics…
+        </div>
+
+        <div style="margin-top:10px;">
+          <table id="faces-table">
+            <thead>
+            <tr>
+              <th>ID</th>
+              <th>EAR</th>
+              <th>CNN</th>
+              <th>State</th>
+              <th>Closed F</th>
+              <th>Pitch / Yaw / Roll</th>
+            </tr>
+            </thead>
+            <tbody id="faces-body">
+            <tr><td colspan="6">No faces detected</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout-bottom">
+    <!-- GRAPH CARD -->
+    <div class="card">
+      <div class="card-inner">
+        <div class="card-title-row">
+          <div class="card-title">Eye Dynamics</div>
+          <div class="card-chip">EAR + CNN</div>
+        </div>
+        <div class="chart-shell">
+          <canvas id="earChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPASS CARD -->
+    <div class="card">
+      <div class="card-inner">
+        <div class="card-title-row">
+          <div class="card-title">Head Orientation</div>
+          <div class="card-chip">Yaw / Pitch Visual</div>
+        </div>
+        <div style="display:flex; justify-content:center; margin-top:8px;">
+          <canvas id="compassCanvas" width="260" height="260"></canvas>
+        </div>
+        <div class="compass-hud-labels">
+          <span>LEFT / RIGHT: Yaw</span>
+          <span>UP / DOWN: Pitch</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* === EAR + CNN CHART === */
+const ctx = document.getElementById('earChart').getContext('2d');
+let labels = [], earData = [], cnnData = [];
+
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: labels,
+    datasets: [
+      {
+        label: 'EAR',
+        data: earData,
+        borderColor: 'rgba(56,189,248,1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.25
+      },
+      {
+        label: 'CNN Probability',
+        data: cnnData,
+        borderColor: 'rgba(251,191,36,1)',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.25
+      }
+    ]
+  },
+  options: {
+    scales: {
+      y: {
+        min: 0, max: 1,
+        grid: { color: 'rgba(55,65,81,0.7)' },
+        ticks: { color: '#cbd5f5', font:{size:10} }
+      },
+      x: {
+        grid: { display:false },
+        ticks: { display:false }
+      }
+    },
+    plugins: {
+      legend: {
+        labels: { color: '#e5e7eb', font: { size:11 } }
+      }
+    }
+  }
+});
+
+function updateGraph(face) {
+  if (earData.length > 40) {
+    labels.shift(); earData.shift(); cnnData.shift();
+  }
+  labels.push("");
+  earData.push(face.ear);
+  cnnData.push(face.cnn_open_prob);
+  chart.update();
+}
+
+/* === STATUS CARDS === */
+function updateCards(f){
+  const cards = ["card-safe","card-blink","card-drowsy","card-sleep"];
+  cards.forEach(id => document.getElementById(id).classList.add("hidden"));
+
+  if(f.drowsy && f.closed_frames > 30) {
+    document.getElementById("card-sleep").classList.remove("hidden");
+    document.getElementById("hud-main-state").innerText = "CRITICAL: SLEEPING";
+  } else if(f.drowsy) {
+    document.getElementById("card-drowsy").classList.remove("hidden");
+    document.getElementById("hud-main-state").innerText = "WARNING: DROWSY";
+  } else if(f.ear < 0.20) {
+    document.getElementById("card-blink").classList.remove("hidden");
+    document.getElementById("hud-main-state").innerText = "BLINKING";
+  } else {
+    document.getElementById("card-safe").classList.remove("hidden");
+    document.getElementById("hud-main-state").innerText = "DRIVER STABLE";
+  }
+}
+
+/* === COMPASS === */
+const compass = document.getElementById("compassCanvas");
+const cc = compass.getContext("2d");
+
+function drawCompass(dir){
+  const cx=130, cy=130, r=90;
+  cc.clearRect(0,0,260,260);
+
+  // Outer ring
+  cc.beginPath();
+  cc.arc(cx,cy,r,0,Math.PI*2);
+  cc.strokeStyle="rgba(148,163,184,0.6)";
+  cc.lineWidth=2;
+  cc.stroke();
+
+  // Cross hair
+  cc.strokeStyle="rgba(55,65,81,0.9)";
+  cc.lineWidth=1;
+  cc.beginPath();
+  cc.moveTo(cx-r, cy); cc.lineTo(cx+r, cy);
+  cc.moveTo(cx, cy-r); cc.lineTo(cx, cy+r);
+  cc.stroke();
+
+  // Cardinal labels
+  cc.fillStyle="#e5e7eb";
+  cc.font="12px system-ui";
+  cc.fillText("UP", cx-10, cy-r-8);
+  cc.fillText("DOWN", cx-18, cy+r+16);
+  cc.fillText("LEFT", cx-r-30, cy+4);
+  cc.fillText("RIGHT", cx+r+6, cy+4);
+
+  let dx=0, dy=0;
+  if(dir==="LEFT")  dx=-40;
+  if(dir==="RIGHT") dx= 40;
+  if(dir==="UP")    dy=-40;
+  if(dir==="DOWN")  dy= 40;
+
+  // Dot
+  const gradient = cc.createRadialGradient(cx+dx,cy+dy,2,cx+dx,cy+dy,12);
+  gradient.addColorStop(0,"#38bdf8");
+  gradient.addColorStop(1,"rgba(15,23,42,1)");
+  cc.fillStyle=gradient;
+  cc.beginPath();
+  cc.arc(cx+dx,cy+dy,9,0,Math.PI*2);
+  cc.fill();
+}
+
+/* === MAIN REFRESH LOOP === */
+async function refreshDashboard(){
+  try{
+    const res = await fetch('/status');
+    const j = await res.json();
+
+    // Top stats
+    const camDot = document.getElementById("cam-dot");
+    const camText= document.getElementById("cam-text");
+    if(j.camera_ok){
+      camDot.classList.remove("off");
+      camText.innerText = "Camera: Online";
+    } else {
+      camDot.classList.add("off");
+      camText.innerText = "Camera: Offline";
+    }
+
+    document.getElementById("stat-fps").innerText = j.fps.toFixed(1);
+    document.getElementById("stat-ear-th").innerText = j.ear_threshold.toFixed(3);
+    if(j.frame_size && j.frame_size.length===2){
+      document.getElementById("hud-res").innerText = `${j.frame_size[0]}×${j.frame_size[1]}`;
+    }
+    document.getElementById("chip-last-update").innerText =
+      "Last: " + (j.last_update ? j.last_update.substring(11,19) : "—");
+
+    // Model Status
+    const modelDot = document.getElementById("model-dot");
+    const modelText = document.getElementById("model-text");
+    if(j.model_ok){
+      modelDot.classList.remove("off");
+      modelText.innerText = "Mode: Hybrid (AI)";
+    } else {
+      modelDot.classList.add("off");
+      modelText.innerText = "Mode: Geometric";
+    }
+
+    // Faces
+    const faces = j.faces || {};
+    const tbody = document.getElementById("faces-body");
+
+    if(Object.keys(faces).length === 0){
+      tbody.innerHTML = `<tr><td colspan="6">No faces detected</td></tr>`;
+      document.getElementById("alarmOverlay").style.display = "none";
+      document.getElementById("hud-main-state").innerText = "Waiting for face…";
+    } else {
+      const keys = Object.keys(faces);
+      const driver = faces[keys[0]]; // treat first face as driver
+      updateCards(driver);
+      updateGraph(driver);
+
+      const hp = driver.head_pose;
+      let dir = "CENTER";
+      if(hp.yaw > 6) dir="RIGHT";
+      else if(hp.yaw < -6) dir="LEFT";
+      else if(hp.pitch > 4) dir="DOWN";
+      else if(hp.pitch < -4) dir="UP";
+      drawCompass(dir);
+
+      document.getElementById("alarmOverlay").style.display =
+        driver.drowsy ? "block" : "none";
+
+      // Build face table
+      let rows = "";
+      for(const k of keys){
+        const f = faces[k];
+        const hp2 = f.head_pose;
+        let stateTag;
+        if(f.drowsy && f.closed_frames>30)
+          stateTag = `<span class="tag tag-bad">SLEEP</span>`;
+        else if(f.drowsy)
+          stateTag = `<span class="tag tag-warn">DROWSY</span>`;
+        else if(f.ear < 0.20)
+          stateTag = `<span class="tag tag-warn">BLINK</span>`;
+        else
+          stateTag = `<span class="tag tag-ok">OK</span>`;
+
+        rows += `<tr>
+          <td>${f.face_id}</td>
+          <td>${f.ear.toFixed(3)}</td>
+          <td>${f.cnn_open_prob.toFixed(2)}</td>
+          <td>${stateTag}</td>
+          <td>${f.closed_frames}</td>
+          <td>${hp2.pitch.toFixed(1)}, ${hp2.yaw.toFixed(1)}, ${hp2.roll.toFixed(1)}</td>
+        </tr>`;
+      }
+      tbody.innerHTML = rows;
+    }
+
+    // System status text
+    document.getElementById("system-status").innerHTML =
+      `Camera: <b>${j.camera_ok ? 'OK' : 'NOT READY'}</b> · ` +
+      `FPS: <b>${j.fps.toFixed(1)}</b> · ` +
+      `Faces: <b>${Object.keys(j.faces || {}).length}</b> · ` +
+      `Calibrated: <b>${j.calibrated ? 'YES' : 'NO'}</b>`;
+
+  }catch(e){
+    console.error(e);
+  }
+  setTimeout(refreshDashboard, 700);
+}
+
+refreshDashboard();
+</script>
+</body>
+</html>

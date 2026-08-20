@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Drowsiness Logs</title>
+  <style>
+    body{font-family:Arial, sans-serif; background:#111; color:#eee; padding:12px;}
+    table{width:100%; border-collapse:collapse; margin-top:10px;}
+    th,td{padding:6px; border-bottom:1px solid #333; text-align:left; font-size:14px;}
+    .topbar{display:flex;justify-content:space-between;align-items:center;}
+    a{color:#6cf;}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h2>Drowsiness System Logs</h2>
+    <a href="/logs_csv" target="_blank">⬇ Download CSV</a>
+  </div>
+
+  {% if lines|length == 0 %}
+    <p>No logs yet.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr><th>Timestamp</th><th>Message</th></tr>
+      </thead>
+      <tbody>
+      {% for line in lines %}
+        {% if line.startswith('[') and ']' in line %}
+          {% set ts = line.split(']')[0].strip('[]') %}
+          {% set msg = line.split(']')[1].strip() %}
+          <tr>
+            <td>{{ ts }}</td>
+            <td>{{ msg }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td>-</td><td>{{ line }}</td>
+          </tr>
+        {% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</body>
+</html>
